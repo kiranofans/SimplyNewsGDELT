@@ -1,0 +1,7 @@
+{
+  "name": "Simply News",
+  "description": "A responsive, global news aggregator using GDELT and Open-Meteo for real-time news and weather updates.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
