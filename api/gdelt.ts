@@ -3,16 +3,8 @@ import { GDELTQueryParams, NewsResponse, ErrorCode } from '../types';
 const BASE_URL = 'https://api.gdeltproject.org/api/v2/doc/doc';
 const CACHE_EXPIRY = 5 * 60 * 1000;
 
-// Array of proxy generators to rotate through
-const PROXIES = [
-  // CorsProxy.io is generally reliable and fast
-  (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-  // AllOrigins is a good backup
-  (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
-];
-
 let lastRequestTime = 0;
-const MIN_REQUEST_GAP = 2000; // 2 seconds gap to avoid rate limits
+const MIN_REQUEST_GAP = 1000; // 1 second gap
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -22,48 +14,6 @@ const getCacheKey = (params: GDELTQueryParams) => {
   const lang = params.language || 'all';
   return `gdelt_cache_${country.toUpperCase()}_${query.toLowerCase().replace(/\s+/g, '_')}_${lang}`;
 };
-
-async function fetchWithFailover(targetUrl: string, attempt = 0): Promise<any> {
-  if (attempt >= PROXIES.length) {
-    throw { code: ErrorCode.NETWORK_ERROR, message: 'Unable to connect to news network.' };
-  }
-
-  const buildProxyUrl = PROXIES[attempt];
-  const proxiedUrl = buildProxyUrl(targetUrl);
-
-  try {
-    const response = await fetch(proxiedUrl);
-
-    if (!response.ok) {
-      // If we hit a hard rate limit (429), stopping might be better than retrying immediately,
-      // but rotating proxies might bypass IP blocks.
-      console.warn(`Proxy ${attempt} failed with status ${response.status}`);
-      return await fetchWithFailover(targetUrl, attempt + 1);
-    }
-
-    const text = await response.text();
-
-    // Check for GDELT specific text-based errors that return 200 OK
-    if (text.includes('Please limit your queries') || text.includes('concurrent queries')) {
-       throw { code: ErrorCode.RATE_LIMITED, message: 'Global news feed busy. Please wait a moment.' };
-    }
-
-    // Try parsing JSON
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      console.warn(`Proxy ${attempt} returned invalid JSON`);
-      // Invalid JSON often means an HTML error page or proxy error page
-      return await fetchWithFailover(targetUrl, attempt + 1);
-    }
-
-  } catch (error: any) {
-    if (error.code === ErrorCode.RATE_LIMITED) throw error;
-    
-    console.warn(`Proxy ${attempt} network error:`, error);
-    return await fetchWithFailover(targetUrl, attempt + 1);
-  }
-}
 
 export const fetchNews = async (params: GDELTQueryParams): Promise<NewsResponse> => {
   const now = Date.now();
@@ -76,18 +26,23 @@ export const fetchNews = async (params: GDELTQueryParams): Promise<NewsResponse>
   // Construct the query string
   let finalQuery = params.query || 'world';
 
+  // Ensure strict deduplication of query params
   if (params.language) {
+    const langParam = `sourcelang:${params.language}`;
     if (!finalQuery.includes('sourcelang:') && !finalQuery.includes('language:')) {
-      finalQuery = `${finalQuery} sourcelang:${params.language}`;
+      finalQuery = `${finalQuery} ${langParam}`;
     }
   }
 
-  if (params.country && !finalQuery.includes('sourcecountry:')) {
-    finalQuery = `${finalQuery} sourcecountry:${params.country}`;
+  if (params.country) {
+    const countryParam = `sourcecountry:${params.country}`;
+    if (!finalQuery.includes('sourcecountry:')) {
+      finalQuery = `${finalQuery} ${countryParam}`;
+    }
   }
 
   const urlParams = new URLSearchParams({
-    query: finalQuery,
+    query: finalQuery.trim(),
     mode: params.mode || 'artlist',
     maxrecords: (params.maxrecords || 50).toString(),
     format: 'json', 
@@ -98,20 +53,49 @@ export const fetchNews = async (params: GDELTQueryParams): Promise<NewsResponse>
     urlParams.append('timespan', params.timespan);
   }
   
-  // Direct GDELT URL
   const targetUrl = `${BASE_URL}?${urlParams.toString()}`;
 
   try {
-    const data = await fetchWithFailover(targetUrl);
+    const controller = new AbortController();
+    // Increased timeout to 30 seconds to avoid "signal is aborted without reason" on slow networks
+    const id = setTimeout(() => controller.abort(), 30000); 
+
+    const response = await fetch(targetUrl, { 
+      signal: controller.signal
+    });
     
+    clearTimeout(id);
+
+    if (!response.ok) {
+      throw { code: ErrorCode.API_ERROR, message: `GDELT returned ${response.status}` };
+    }
+
+    const text = await response.text();
+
+    // Check for GDELT specific text-based errors that return 200 OK
+    if (text.includes('Please limit your queries') || text.includes('concurrent queries')) {
+       throw { code: ErrorCode.RATE_LIMITED, message: 'Service busy. Please try again momentarily.' };
+    }
+
+    // Attempt to parse JSON
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      throw { code: ErrorCode.API_ERROR, message: 'Invalid response format from server.' };
+    }
+    
+    // GDELT structure: { articles: [...] } or just empty for no results
     const articles = data.articles || [];
     const result = { articles };
 
-    // Cache successful result
-    localStorage.setItem(getCacheKey(params), JSON.stringify({
-      timestamp: Date.now(),
-      data: result
-    }));
+    // Only cache if we got results
+    if (articles.length > 0) {
+      localStorage.setItem(getCacheKey(params), JSON.stringify({
+        timestamp: Date.now(),
+        data: result
+      }));
+    }
 
     return result;
 
@@ -124,9 +108,19 @@ export const fetchNews = async (params: GDELTQueryParams): Promise<NewsResponse>
       return cached;
     }
 
+    // Handle Timeout / AbortError
+    if (error.name === 'AbortError' || (error.message && error.message.includes('aborted'))) {
+      throw { code: ErrorCode.NETWORK_ERROR, message: 'Unable to connect to news network. Please try again later.' };
+    }
+
+    // Handle Network/CORS errors
+    if (error.message && (error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))) {
+       throw { code: ErrorCode.NETWORK_ERROR, message: 'Unable to connect to news network. Please try again later.' };
+    }
+
     throw { 
       code: error.code || ErrorCode.NETWORK_ERROR, 
-      message: error.message || 'Failed to connect to news stream.' 
+      message: error.message || 'Unable to connect to news network. Please try again later.' 
     };
   }
 };
@@ -179,10 +173,6 @@ export interface DiagnosticLog {
   details?: string;
 }
 
-/**
- * Runs a comprehensive automation test on the GDELT connection.
- * Used for system health checks and debugging.
- */
 export const runSystemHealthCheck = async (logger: (log: DiagnosticLog) => void) => {
   const log = (stage: DiagnosticLog['stage'], status: DiagnosticLog['status'], message: string, details?: string) => {
     logger({
@@ -194,24 +184,21 @@ export const runSystemHealthCheck = async (logger: (log: DiagnosticLog) => void)
     });
   };
 
-  // 1. Network Connectivity
   log('NETWORK', 'pending', 'Checking network connectivity...');
-  await wait(500); // UI visual pace
+  await wait(500); 
   if (!navigator.onLine) {
     log('NETWORK', 'error', 'Offline', 'Browser reports offline status');
     return;
   }
   log('NETWORK', 'success', 'Online', 'Navigator connectivity verified');
 
-  // 2. API Latency & Logic
-  log('API', 'pending', 'Connecting to GDELT (bypassing cache)...');
+  log('API', 'pending', 'Connecting to GDELT (Direct)...');
   const start = performance.now();
   
   try {
-    // Unique query to bypass cache for true connectivity test
-    // "climate" is a stable topic, minus a random string to force new results
+    // Simple test query
     const response = await fetchNews({ 
-        query: `climate -"test${Date.now()}"`,
+        query: `climate`,
         maxrecords: 5,
         language: 'english'
     });
@@ -219,17 +206,15 @@ export const runSystemHealthCheck = async (logger: (log: DiagnosticLog) => void)
     const latency = Math.round(performance.now() - start);
     log('API', 'success', `Response received in ${latency}ms`);
     
-    // 3. Performance Check
     log('PERFORMANCE', 'pending', 'Analyzing latency...');
-    if (latency < 1500) {
-      log('PERFORMANCE', 'success', `Latency: ${latency}ms`, 'Optimal connection speed');
-    } else if (latency < 3500) {
+    if (latency < 1000) {
+      log('PERFORMANCE', 'success', `Latency: ${latency}ms`, 'Excellent connection speed');
+    } else if (latency < 5000) {
       log('PERFORMANCE', 'warning', `Latency: ${latency}ms`, 'Connection is slower than average');
     } else {
       log('PERFORMANCE', 'warning', `Latency: ${latency}ms`, 'High latency detected');
     }
 
-    // 4. Schema Validation
     log('SCHEMA', 'pending', 'Validating data structure...');
     await wait(300); 
 
@@ -254,6 +239,10 @@ export const runSystemHealthCheck = async (logger: (log: DiagnosticLog) => void)
     }
 
   } catch (e: any) {
-    log('API', 'error', 'API Request Failed', e.message);
+    if (e.message && e.message.includes('CORS')) {
+      log('API', 'error', 'CORS Error', 'Direct browser access blocked by GDELT. A proxy is usually required.');
+    } else {
+      log('API', 'error', 'API Request Failed', e.message);
+    }
   }
 };

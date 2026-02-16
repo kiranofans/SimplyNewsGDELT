@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { NewsArticle } from '../types';
-import { shareToTwitter, copyToClipboard } from '../utils/helpers';
-import { ArrowLeft, ExternalLink, Twitter, Link as LinkIcon, AlertCircle, Loader2, ShieldAlert, FileWarning, Share2 } from 'lucide-react';
+import { copyToClipboard, shareToTwitter } from '../utils/helpers';
+import { ArrowLeft, ExternalLink, Link as LinkIcon, Loader2, ShieldAlert, FileWarning, Share2, MoreVertical, RefreshCw } from 'lucide-react';
 
 interface NewsDetailProps {
   article: NewsArticle;
   onBack: () => void;
 }
 
-// Major publishers/platforms known to strict block iframes (X-Frame-Options: DENY/SAMEORIGIN)
 const BLOCKED_DOMAINS = [
   'nytimes.com', 'cnn.com', 'bbc.com', 'bbc.co.uk', 'wsj.com', 
   'washingtonpost.com', 'reuters.com', 'bloomberg.com', 'twitter.com', 
@@ -17,8 +16,6 @@ const BLOCKED_DOMAINS = [
   'medium.com', 'wired.com', 'theguardian.com'
 ];
 
-// Custom WebView wrapper to mimic React Native syntax for web compatibility
-// Delegating all state handling to parent for consistent error UI
 const WebView: React.FC<{ 
   source: { uri: string }; 
   className?: string; 
@@ -41,36 +38,30 @@ const NewsDetail: React.FC<NewsDetailProps> = ({ article, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [loadTimeout, setLoadTimeout] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
 
-  // Check if domain is in the blocked list
   const isBlocked = BLOCKED_DOMAINS.some(d => 
     (article.domain && article.domain.toLowerCase().includes(d)) || 
     article.url.toLowerCase().includes(d)
   );
 
   useEffect(() => {
-    // If domain is known to be blocked, try to open in new tab immediately
     if (isBlocked) {
       window.open(article.url, '_blank', 'noopener,noreferrer');
-    } else {
-      window.scrollTo(0, 0);
     }
   }, [isBlocked, article.url]);
 
   useEffect(() => {
-    // Pre-check logic: Attempt to detect X-Frame-Options or CSP headers
     const checkHeaders = async () => {
       if (isBlocked) return;
       
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout for check
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
 
         const response = await fetch(article.url, { 
             method: 'HEAD',
             signal: controller.signal,
-            // We use default mode 'cors'. If the server doesn't support CORS, this throws.
-            // If it supports CORS, we can check headers.
         });
         
         clearTimeout(timeoutId);
@@ -87,9 +78,7 @@ const NewsDetail: React.FC<NewsDetailProps> = ({ article, onBack }) => {
             setLoading(false);
         }
       } catch (e) {
-         // CORS error or network failure during pre-check.
-         // Most news sites block CORS, so this often fails silently.
-         // We proceed to try the iframe which has more permissive embedding rules than fetch.
+         // Proceed to try iframe
       }
     };
 
@@ -98,12 +87,10 @@ const NewsDetail: React.FC<NewsDetailProps> = ({ article, onBack }) => {
 
   useEffect(() => {
     if (!isBlocked && loading) {
-      // 1. Soft timeout: Show "Taking too long?" link
       const timer = setTimeout(() => {
         setLoadTimeout(true);
       }, 5000); 
       
-      // 2. Hard timeout: Force error state after 15 seconds
       const errorTimer = setTimeout(() => {
         if (loading) {
            setHasError(true);
@@ -121,22 +108,33 @@ const NewsDetail: React.FC<NewsDetailProps> = ({ article, onBack }) => {
   const onCopyLink = async () => {
     const success = await copyToClipboard(article.url);
     if (success) alert('Link copied to clipboard!');
+    setShowMenu(false);
   };
 
   const handleOpenExternal = () => {
     window.open(article.url, '_blank', 'noopener,noreferrer');
+    setShowMenu(false);
   };
 
-  // 1. Case: Known Blocked Domain -> Show Redirect UI (Simulated Error State)
+  const handleReload = () => {
+    setLoading(true);
+    setHasError(false);
+    const iframe = document.querySelector('iframe');
+    if (iframe) {
+        iframe.src = iframe.src;
+    }
+    setShowMenu(false);
+  };
+
   if (isBlocked) {
      return (
         <div className="fixed inset-0 bg-white z-[100] flex flex-col animate-in slide-in-from-bottom-4 duration-300">
-           <button 
-             onClick={onBack}
-             className="absolute top-4 left-4 z-50 p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
-           >
-              <ArrowLeft size={24} className="text-gray-900" />
-           </button>
+           <div className="h-16 bg-white border-b border-gray-100 flex items-center justify-center px-4 z-50 relative">
+             <button onClick={onBack} className="absolute left-4 p-2 -ml-2 hover:bg-gray-100 rounded-full transition-colors">
+               <ArrowLeft size={24} className="text-gray-900" />
+             </button>
+             <span className="font-black text-lg uppercase tracking-tight">Simply News</span>
+           </div>
            
            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-gray-50">
                <div className="relative mb-6">
@@ -146,9 +144,15 @@ const NewsDetail: React.FC<NewsDetailProps> = ({ article, onBack }) => {
                </div>
                
                <h2 className="text-2xl font-black text-gray-900 mb-3">Redirecting...</h2>
-               <p className="text-gray-500 mb-8 max-w-sm mx-auto leading-relaxed">
+               <p className="text-gray-500 mb-6 max-w-sm mx-auto leading-relaxed">
                  <strong className="text-gray-900">{article.domain}</strong> requires being opened in a separate tab.
                </p>
+
+               <div className="mb-8 px-6 py-3 bg-white border border-gray-200 rounded-xl w-full max-w-md mx-auto flex items-center gap-3 shadow-sm cursor-pointer hover:bg-gray-50 transition-colors" onClick={onCopyLink} title="Click to copy">
+                  <LinkIcon size={16} className="text-gray-400 flex-shrink-0" />
+                  <span className="text-xs text-gray-600 truncate font-mono flex-1 text-left">{article.url}</span>
+               </div>
+
                <button 
                   onClick={handleOpenExternal}
                   className="bg-blue-600 text-white px-8 py-3.5 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 flex items-center gap-2 active:scale-95"
@@ -160,14 +164,80 @@ const NewsDetail: React.FC<NewsDetailProps> = ({ article, onBack }) => {
      );
   }
 
-  // 2. Case: Try WebView with Floating Controls (Full Screen Mode)
   return (
     <div className="fixed inset-0 bg-white z-[100] flex flex-col animate-in slide-in-from-bottom-4 duration-300">
       
+      {/* Navigation Bar - Fixed Top - Covers iframe content */}
+      <div className="absolute top-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-3 md:px-6 z-[60] shadow-sm">
+         <div className="flex items-center gap-2">
+            <button 
+              onClick={onBack}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-900"
+              title="Back"
+            >
+               <ArrowLeft size={22} />
+            </button>
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">{article.domain}</span>
+              <span className="text-sm font-bold text-gray-900 leading-tight truncate max-w-[150px] md:max-w-md">{article.title}</span>
+            </div>
+         </div>
+
+         <div className="flex items-center gap-1">
+            <button 
+              onClick={() => shareToTwitter(article.title, article.url)}
+              className="p-2 text-gray-500 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-colors hidden md:block"
+              title="Share to Twitter"
+            >
+              <Share2 size={20} />
+            </button>
+            <button 
+              onClick={handleOpenExternal}
+              className="p-2 text-gray-500 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-colors hidden md:block"
+              title="Open in Browser"
+            >
+              <ExternalLink size={20} />
+            </button>
+            
+            <div className="relative">
+              <button 
+                onClick={() => setShowMenu(!showMenu)}
+                className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <MoreVertical size={20} />
+              </button>
+              
+              {showMenu && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-100 z-20 py-1 animate-in fade-in zoom-in-95 duration-200">
+                    <button onClick={handleReload} className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-2 text-sm font-medium text-gray-700">
+                      <RefreshCw size={16} /> Reload Page
+                    </button>
+                    <button onClick={() => shareToTwitter(article.title, article.url)} className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-2 text-sm font-medium text-gray-700 md:hidden">
+                      <Share2 size={16} /> Share
+                    </button>
+                    <button onClick={onCopyLink} className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-2 text-sm font-medium text-gray-700">
+                      <LinkIcon size={16} /> Copy Link
+                    </button>
+                    <div className="h-px bg-gray-100 my-1"></div>
+                    <div className="px-4 py-2 bg-gray-50 m-2 rounded text-[10px] text-gray-500 font-mono break-all select-all">
+                      {article.url}
+                    </div>
+                    <button onClick={handleOpenExternal} className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-2 text-sm font-bold text-blue-600">
+                      <ExternalLink size={16} /> Open in Browser
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+         </div>
+      </div>
+
       {/* Webview Container - Full Height */}
       <div className="flex-1 relative bg-gray-50 w-full h-full overflow-hidden">
          {loading && !hasError && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 z-20">
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 z-20 pt-16">
                <Loader2 className="animate-spin text-blue-600 mb-3" size={32} />
                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Loading Source...</p>
                {loadTimeout && (
@@ -184,21 +254,33 @@ const NewsDetail: React.FC<NewsDetailProps> = ({ article, onBack }) => {
          )}
          
          {!hasError && (
-           <WebView 
-              source={{ uri: article.url }} 
-              className="w-full h-full border-0 relative z-10 bg-white"
-              onLoad={() => setLoading(false)}
-              onError={() => {
-                setLoading(false);
-                setHasError(true);
-              }}
-           />
+           <>
+             <WebView 
+                source={{ uri: article.url }} 
+                className="w-full h-full border-0 relative z-10 bg-white"
+                onLoad={() => setLoading(false)}
+                onError={() => {
+                  setLoading(false);
+                  setHasError(true);
+                }}
+             />
+             {/* Persistent floating button for successful loads (in case of silent white-screen failure) */}
+             {!loading && (
+                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-500 pointer-events-none">
+                    <button 
+                        onClick={handleOpenExternal}
+                        className="pointer-events-auto bg-black/80 hover:bg-black text-white backdrop-blur-md px-5 py-2.5 rounded-full text-xs font-bold shadow-xl border border-white/10 flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
+                    >
+                        Read on {article.domain} <ExternalLink size={12} />
+                    </button>
+                </div>
+             )}
+           </>
          )}
 
-         {/* 3. Case: Explicit Error State */}
          {hasError && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 z-20 p-8 text-center animate-in fade-in zoom-in-95">
-                <div className="relative mb-8">
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 z-20 p-8 text-center animate-in fade-in zoom-in-95 pt-16">
+                <div className="relative mb-6">
                     <div className="w-32 h-32 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
                         <FileWarning size={64} className="text-gray-300" />
                     </div>
@@ -207,10 +289,16 @@ const NewsDetail: React.FC<NewsDetailProps> = ({ article, onBack }) => {
                     </div>
                 </div>
                 
-                <h3 className="text-2xl font-black text-gray-900 mb-3">Preview Unavailable</h3>
-                <p className="text-gray-500 mb-8 max-w-xs mx-auto leading-relaxed text-sm md:text-base font-medium">
-                   This article cannot be embedded due to publisher security settings.
+                <h3 className="text-2xl font-black text-gray-900 mb-2">Preview Unavailable</h3>
+                <p className="text-gray-500 mb-6 max-w-xs mx-auto leading-relaxed text-sm md:text-base font-medium">
+                   This page cannot be loaded for now. Please click the link below to view it.
                 </p>
+
+                <div className="mb-8 px-6 py-3 bg-white border border-gray-200 rounded-xl w-full max-w-md mx-auto flex items-center gap-3 shadow-sm cursor-pointer hover:bg-gray-50 transition-colors" onClick={onCopyLink} title="Click to copy">
+                    <LinkIcon size={16} className="text-gray-400 flex-shrink-0" />
+                    <span className="text-xs text-gray-600 truncate font-mono flex-1 text-left">{article.url}</span>
+                </div>
+
                 <button 
                     onClick={handleOpenExternal}
                     className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold flex items-center gap-3 shadow-xl shadow-blue-200 hover:bg-blue-700 transition-transform active:scale-95 hover:-translate-y-1"
@@ -220,44 +308,6 @@ const NewsDetail: React.FC<NewsDetailProps> = ({ article, onBack }) => {
                 </button>
             </div>
          )}
-
-         {/* 4. Floating Control Bar (Replaces Top Navbar) */}
-         <div className="fixed bottom-8 inset-x-0 flex justify-center z-50 pointer-events-none">
-            <div className="bg-gray-900/90 backdrop-blur-xl text-white pl-2 pr-4 py-2 rounded-full shadow-2xl flex items-center gap-2 pointer-events-auto border border-white/10 animate-in slide-in-from-bottom-10 fade-in duration-500">
-               <button 
-                  onClick={onBack}
-                  className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-                  title="Back to Feed"
-               >
-                  <ArrowLeft size={20} />
-               </button>
-               
-               <div className="flex flex-col px-2 max-w-[140px]">
-                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest truncate">{article.domain}</span>
-                  <span className="text-xs font-bold text-white truncate">{article.title}</span>
-               </div>
-
-               <div className="h-6 w-px bg-white/10 mx-1"></div>
-
-               <div className="flex items-center gap-1">
-                   <button 
-                      onClick={() => shareToTwitter(article.title, article.url)}
-                      className="p-2 text-gray-400 hover:text-white transition-colors"
-                      title="Share"
-                   >
-                      <Share2 size={18} />
-                   </button>
-                   <button 
-                      onClick={handleOpenExternal}
-                      className="p-2 text-gray-400 hover:text-white transition-colors"
-                      title="Open in Browser"
-                   >
-                      <ExternalLink size={18} />
-                   </button>
-               </div>
-            </div>
-         </div>
-
       </div>
     </div>
   );

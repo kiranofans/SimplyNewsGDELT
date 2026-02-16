@@ -86,10 +86,6 @@ const App: React.FC = () => {
       let fetchedArticles = data.articles || [];
       let filteredArticles = fetchedArticles;
 
-      // Removed strict client-side filtering. 
-      // We trust the API query `sourcecountry:XX` to return relevant results.
-      // Strict filtering on `article.sourcecountry` can cause empty results if metadata is missing.
-
       // DOUBLE FALLBACK:
       // If the API returned nothing at all for this country, try global news
       if (filteredArticles.length === 0 && !isLoadMore && params.country && !useMockData) {
@@ -203,6 +199,18 @@ const App: React.FC = () => {
     detectLocation();
   }, [loadNews]);
 
+  // Lock body scroll when NewsDetail is open to prevent background scrolling
+  useEffect(() => {
+    if (selectedArticle) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [selectedArticle]);
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const newFilters = { ...filters, query: searchInput || 'world' };
@@ -212,12 +220,14 @@ const App: React.FC = () => {
     loadNews(newFilters);
   };
 
-  if (selectedArticle) {
-    return <NewsDetail article={selectedArticle} onBack={() => setSelectedArticle(null)} />;
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col relative">
+      
+      {/* Article Detail Overlay */}
+      {selectedArticle && (
+        <NewsDetail article={selectedArticle} onBack={() => setSelectedArticle(null)} />
+      )}
+
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 px-3 md:px-8 h-16 md:h-20 flex items-center justify-between gap-2">
         {isMobileSearchOpen && (
           <div className="absolute inset-0 bg-white z-[60] flex items-center px-4 gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -290,6 +300,22 @@ const App: React.FC = () => {
             >
               Use Backup Mock Data
             </button>
+          </div>
+        )}
+
+        {!loading && !error && articles.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+             <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <Globe className="text-gray-400" size={40} />
+             </div>
+             <h3 className="text-xl font-bold text-gray-900 mb-2">No News Found</h3>
+             <p className="text-gray-500 max-w-xs mx-auto mb-6">We couldn't find any articles matching your current filters.</p>
+             <button 
+               onClick={handleLogoClick}
+               className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700"
+             >
+               Reset Filters
+             </button>
           </div>
         )}
 
