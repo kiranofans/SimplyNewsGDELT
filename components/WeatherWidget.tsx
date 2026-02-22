@@ -7,11 +7,15 @@ import { CloudRain, ChevronDown, ChevronUp, MapPin, CalendarDays } from 'lucide-
 
 interface WeatherWidgetProps {
   variant?: 'mini';
+  lat?: number;
+  lon?: number;
+  locationName?: string;
 }
 
-const WeatherWidget: React.FC<WeatherWidgetProps> = () => {
+const WeatherWidget: React.FC<WeatherWidgetProps> = ({ lat, lon, locationName = 'Ottawa, CA' }) => {
   const [data, setData] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -26,17 +30,19 @@ const WeatherWidget: React.FC<WeatherWidgetProps> = () => {
   useEffect(() => {
     const getWeatherData = async () => {
       setLoading(true);
+      setError(false);
       try {
-        const weather = await fetchWeather();
+        const weather = await fetchWeather(lat, lon);
         setData(weather);
       } catch (err) {
         console.error(err);
+        setError(true);
       } finally {
         setLoading(false);
       }
     };
     getWeatherData();
-  }, []);
+  }, [lat, lon]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -48,11 +54,19 @@ const WeatherWidget: React.FC<WeatherWidgetProps> = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isExpanded]);
 
+  if (error) {
+    return (
+      <div className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center text-red-400 border border-red-100" title="Weather unavailable">
+        <CloudRain size={16} />
+      </div>
+    );
+  }
+
   if (loading || !data) {
     return <div className="w-10 h-10 bg-gray-100 animate-pulse rounded-full" />;
   }
 
-  const MobileRollContent = () => (
+  const renderMobileContent = () => (
     <div className="fixed top-[64px] left-0 right-0 z-40 animate-in slide-in-from-top-2 duration-300">
       <div className="bg-white shadow-xl border-b border-gray-100 overflow-hidden">
         {/* Compact Label Strip */}
@@ -61,7 +75,7 @@ const WeatherWidget: React.FC<WeatherWidgetProps> = () => {
             <CalendarDays size={9} className="text-blue-600" />
             <span className="text-[7px] font-black uppercase tracking-widest text-blue-700">10-Day Scroll</span>
           </div>
-          <span className="text-[7px] font-bold text-gray-400">Ottawa, CA</span>
+          <span className="text-[7px] font-bold text-gray-400">{locationName}</span>
         </div>
 
         {/* Scrollable strip - Height reduced further */}
@@ -102,14 +116,14 @@ const WeatherWidget: React.FC<WeatherWidgetProps> = () => {
       {isExpanded && (
         isMobile ? (
           createPortal(
-            <MobileRollContent />,
+            renderMobileContent(),
             document.body
           )
         ) : (
           <div className="absolute top-full right-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[100] animate-in fade-in zoom-in-95 duration-200">
             <div className="p-4 bg-gray-50 border-b border-gray-100 flex justify-between">
               <span className="text-[10px] font-black uppercase text-blue-600">10-Day Forecast</span>
-              <span className="text-[10px] font-bold text-gray-400">Ottawa, CA</span>
+              <span className="text-[10px] font-bold text-gray-400">{locationName}</span>
             </div>
             <div className="max-h-80 overflow-y-auto p-2">
               {data.daily.time.map((time, i) => (

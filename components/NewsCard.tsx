@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NewsArticle } from '../types';
-import { formatDate, shareToTwitter, shareToTumblr, copyToClipboard, handleWebShare, checkImage, fipsToIso } from '../utils/helpers';
+import { formatDate, shareToTwitter, shareToTumblr, copyToClipboard, handleWebShare, checkImage } from '../utils/helpers';
 import { Share2, Twitter, Link as LinkIcon, MessageSquare, ImageOff } from 'lucide-react';
 
 interface NewsCardProps {
@@ -98,7 +98,7 @@ const NewsCard: React.FC<NewsCardProps> = ({ article, onSelect }) => {
         <div className="flex flex-wrap gap-1 mb-3">
           {article.sourcecountry && (
             <span className="px-2 py-0.5 bg-gray-100 text-[10px] rounded-full text-gray-600 font-medium">
-              📍 {fipsToIso(article.sourcecountry)}
+              📍 {article.sourcecountry}
             </span>
           )}
           {article.language && (

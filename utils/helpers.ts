@@ -44,44 +44,44 @@ export const isEnglishSpeakingCountry = (countryCode: string) => {
 
 export const getLanguageForCountry = (countryCode: string): string | undefined => {
   const code = countryCode.toUpperCase();
-  // Map of Country ISO code to GDELT language identifier
+  // Map of Country ISO code to ISO language code
   const languageMap: Record<string, string> = {
-    // English Speaking / Official (using English as primary news language)
-    'US': 'english', 'GB': 'english', 'CA': 'english', 'AU': 'english', 'NZ': 'english', 
-    'IE': 'english', 'SG': 'english', 'ZA': 'english', 'PH': 'english', 'NG': 'english', 
-    'GH': 'english', 'KE': 'english', 'IN': 'english', 
+    // English Speaking / Official
+    'US': 'en', 'GB': 'en', 'CA': 'en', 'AU': 'en', 'NZ': 'en', 
+    'IE': 'en', 'SG': 'en', 'ZA': 'en', 'PH': 'en', 'NG': 'en', 
+    'GH': 'en', 'KE': 'en', 'IN': 'en', 
     
     // European
-    'FR': 'french', 'MC': 'french', 'CD': 'french', 'CI': 'french', 'SN': 'french',
-    'DE': 'german', 'AT': 'german', 'CH': 'german',
-    'ES': 'spanish', 'MX': 'spanish', 'AR': 'spanish', 'CO': 'spanish', 'CL': 'spanish', 'PE': 'spanish', 'VE': 'spanish', 'GT': 'spanish', 'EC': 'spanish', 'CU': 'spanish', 'BO': 'spanish', 'DO': 'spanish', 'HN': 'spanish', 'PY': 'spanish', 'SV': 'spanish', 'NI': 'spanish', 'CR': 'spanish', 'PA': 'spanish', 'UY': 'spanish',
-    'IT': 'italian',
-    'PT': 'portuguese', 'BR': 'portuguese', 'AO': 'portuguese', 'MZ': 'portuguese',
-    'RU': 'russian', 'BY': 'russian', 'KZ': 'russian',
-    'NL': 'dutch', 'BE': 'dutch',
-    'SE': 'swedish',
-    'NO': 'norwegian',
-    'DK': 'danish',
-    'FI': 'finnish',
-    'PL': 'polish',
-    'UA': 'ukrainian',
-    'RO': 'romanian',
-    'CZ': 'czech',
-    'HU': 'hungarian',
-    'GR': 'greek',
+    'FR': 'fr', 'MC': 'fr', 'CD': 'fr', 'CI': 'fr', 'SN': 'fr',
+    'DE': 'de', 'AT': 'de', 'CH': 'de',
+    'ES': 'es', 'MX': 'es', 'AR': 'es', 'CO': 'es', 'CL': 'es', 'PE': 'es', 'VE': 'es', 'GT': 'es', 'EC': 'es', 'CU': 'es', 'BO': 'es', 'DO': 'es', 'HN': 'es', 'PY': 'es', 'SV': 'es', 'NI': 'es', 'CR': 'es', 'PA': 'es', 'UY': 'es',
+    'IT': 'it',
+    'PT': 'pt', 'BR': 'pt', 'AO': 'pt', 'MZ': 'pt',
+    'RU': 'ru', 'BY': 'ru', 'KZ': 'ru',
+    'NL': 'nl', 'BE': 'nl',
+    'SE': 'sv',
+    'NO': 'no',
+    'DK': 'da',
+    'FI': 'fi',
+    'PL': 'pl',
+    'UA': 'uk',
+    'RO': 'ro',
+    'CZ': 'cs',
+    'HU': 'hu',
+    'GR': 'el',
     
     // Asian / Middle Eastern
-    'CN': 'chinese', 'TW': 'chinese', 'HK': 'chinese',
-    'JP': 'japanese',
-    'KR': 'korean',
-    'TR': 'turkish',
-    'IL': 'hebrew',
-    'SA': 'arabic', 'EG': 'arabic', 'AE': 'arabic', 'IQ': 'arabic', 'JO': 'arabic', 'LB': 'arabic', 'KW': 'arabic', 'OM': 'arabic', 'QA': 'arabic', 'SY': 'arabic', 'YE': 'arabic', 'MA': 'arabic', 'DZ': 'arabic', 'TN': 'arabic', 'LY': 'arabic', 'SD': 'arabic',
-    'IR': 'persian',
-    'ID': 'indonesian',
-    'MY': 'malay',
-    'TH': 'thai',
-    'VN': 'vietnamese'
+    'CN': 'zh', 'TW': 'zh', 'HK': 'zh',
+    'JP': 'ja',
+    'KR': 'ko',
+    'TR': 'tr',
+    'IL': 'he',
+    'SA': 'ar', 'EG': 'ar', 'AE': 'ar', 'IQ': 'ar', 'JO': 'ar', 'LB': 'ar', 'KW': 'ar', 'OM': 'ar', 'QA': 'ar', 'SY': 'ar', 'YE': 'ar', 'MA': 'ar', 'DZ': 'ar', 'TN': 'ar', 'LY': 'ar', 'SD': 'ar',
+    'IR': 'fa',
+    'ID': 'id',
+    'MY': 'ms',
+    'TH': 'th',
+    'VN': 'vi'
   };
 
   return languageMap[code];

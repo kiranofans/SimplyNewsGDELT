@@ -10,7 +10,13 @@ export const fetchWeather = async (lat = DEFAULT_LAT, lon = DEFAULT_LON): Promis
   
   const response = await fetch(url);
   if (!response.ok) throw new Error('Weather API failure');
-  return response.json();
+  const data = await response.json();
+  
+  if (!data.daily) {
+    throw new Error('Invalid weather data format');
+  }
+  
+  return data;
 };
 
 export const getWeatherIcon = (code: number) => {

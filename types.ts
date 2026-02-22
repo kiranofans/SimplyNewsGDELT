@@ -25,7 +25,7 @@ export interface WeatherData {
   };
 }
 
-export interface GDELTQueryParams {
+export interface NewsQueryParams {
   query?: string;
   country?: string;
   language?: string;

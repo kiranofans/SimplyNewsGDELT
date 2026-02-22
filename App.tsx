@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchNews, getCachedNews, getMockNews } from './api/gdelt';
-import { NewsArticle, GDELTQueryParams, ErrorCode } from './types';
+import { fetchNews, getCachedNews, getMockNews } from './api/newscatcher';
+import { NewsArticle, NewsQueryParams, ErrorCode } from './types';
 import NewsCard from './components/NewsCard';
 import SliderHero from './components/SliderHero';
 import WeatherWidget from './components/WeatherWidget';
 import Drawer from './components/Drawer';
 import NewsDetail from './components/NewsDetail';
 import Diagnostics from './components/Diagnostics';
-import { getEmojiFlag, isoToFips, fipsToIso, getLanguageForCountry, getCountryName } from './utils/helpers';
+import { getEmojiFlag, getLanguageForCountry, getCountryName } from './utils/helpers';
 import { Menu, Search, RefreshCw, Globe, X, Bug, ShieldAlert, Loader2, ArrowLeft, Radio } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -20,11 +20,11 @@ const App: React.FC = () => {
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
   
   // Default language is English initially, but will adjust based on country
-  const [filters, setFilters] = useState<GDELTQueryParams>({
+  const [filters, setFilters] = useState<NewsQueryParams>({
     query: 'world',
     timespan: '1d',
     maxrecords: 100,
-    language: 'english'
+    language: 'en'
   });
   
   const [searchInput, setSearchInput] = useState('');
@@ -32,13 +32,14 @@ const App: React.FC = () => {
   const [debugMode, setDebugMode] = useState(false);
   const [useMockData, setUseMockData] = useState(false);
   const [detectedCountry, setDetectedCountry] = useState<{ name: string; code: string } | null>(null);
+  const [weatherLocation, setWeatherLocation] = useState<{ lat: number; lon: number; name: string } | null>(null);
   
   const lastFetchRef = useRef<number>(Date.now());
   const hasInitializedLocation = useRef(false);
   // Fix: Use ReturnType<typeof setTimeout> instead of NodeJS.Timeout to avoid namespace errors in environments without node types
   const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const loadNews = useCallback(async (params: GDELTQueryParams, isLoadMore = false) => {
+  const loadNews = useCallback(async (params: NewsQueryParams, isLoadMore = false) => {
     // Clear existing timer if any
     if (loadingTimerRef.current) {
       clearTimeout(loadingTimerRef.current);
@@ -66,21 +67,7 @@ const App: React.FC = () => {
         await new Promise(r => setTimeout(r, 800));
         data = getMockNews();
       } else {
-        let apiQuery = params.query || 'world';
-        const targetIso = params.country;
-
-        if (targetIso) {
-          targetFips = isoToFips(targetIso);
-          // If query is the default 'world', clear it to only search by source country
-          const baseQuery = (apiQuery === 'world' || !apiQuery) ? '' : apiQuery;
-          apiQuery = `sourcecountry:${targetFips} ${baseQuery}`.trim();
-        }
-
-        data = await fetchNews({
-          ...params,
-          query: apiQuery,
-          country: undefined 
-        });
+        data = await fetchNews(params);
       }
       
       let fetchedArticles = data.articles || [];
@@ -91,7 +78,7 @@ const App: React.FC = () => {
       if (filteredArticles.length === 0 && !isLoadMore && params.country && !useMockData) {
          console.warn("No local news found, falling back to global news.");
          // Note: We might want to notify the user, but for now we fallback gracefully
-         const globalData = await fetchNews({ ...params, query: 'world', country: undefined, language: 'english' });
+         const globalData = await fetchNews({ ...params, query: 'world', country: undefined, language: 'en' });
          filteredArticles = globalData.articles || [];
       }
       
@@ -122,7 +109,7 @@ const App: React.FC = () => {
     }
   }, [useMockData]);
 
-  const handleFilterChange = (f: Partial<GDELTQueryParams>) => {
+  const handleFilterChange = (f: Partial<NewsQueryParams>) => {
     const newFilters = { ...filters, ...f };
     
     // Auto-adjust language if country changed
@@ -146,11 +133,11 @@ const App: React.FC = () => {
     setIsMobileSearchOpen(false);
 
     // Reset to default state (detected country if available, else world)
-    const newFilters: GDELTQueryParams = {
+    const newFilters: NewsQueryParams = {
       query: 'world',
       timespan: '1d',
       maxrecords: 100,
-      language: 'english'
+      language: 'en'
     };
 
     if (detectedCountry) {
@@ -175,11 +162,16 @@ const App: React.FC = () => {
           if (data.country_code) {
             const countryInfo = { name: data.country_name, code: data.country_code };
             setDetectedCountry(countryInfo);
+            setWeatherLocation({
+                lat: data.latitude,
+                lon: data.longitude,
+                name: `${data.city}, ${data.country_code}`
+            });
             
             // Get local language for the detected country
             const detectedLang = getLanguageForCountry(data.country_code);
 
-            const newFilters: GDELTQueryParams = {
+            const newFilters: NewsQueryParams = {
               ...filters,
               query: 'world',
               country: data.country_code,
@@ -266,7 +258,11 @@ const App: React.FC = () => {
 
         <div className="flex items-center justify-end gap-1.5 md:gap-3 flex-shrink-0">
           <button onClick={() => setIsMobileSearchOpen(true)} className="lg:hidden p-2 hover:bg-gray-100 rounded-full text-gray-900"><Search size={22} /></button>
-          <WeatherWidget variant="mini" />
+          <WeatherWidget 
+            lat={weatherLocation?.lat} 
+            lon={weatherLocation?.lon} 
+            locationName={weatherLocation?.name} 
+          />
           <button 
             onClick={() => setDebugMode(true)} 
             className="hidden lg:flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-full bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition-colors"

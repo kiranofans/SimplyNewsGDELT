@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { runSystemHealthCheck, DiagnosticLog } from '../api/gdelt';
+import { runSystemHealthCheck, DiagnosticLog } from '../api/newscatcher';
 import { X, Play, Activity, CheckCircle2, AlertTriangle, XCircle, Loader2, Server } from 'lucide-react';
 
 interface DiagnosticsProps {
@@ -120,7 +120,7 @@ const Diagnostics: React.FC<DiagnosticsProps> = ({ onClose }) => {
         <div className="p-4 bg-white border-t border-gray-100 flex items-center justify-between gap-4 flex-shrink-0">
           <div className="flex items-center gap-2 text-xs text-gray-400 font-medium">
              <Server size={14} />
-             <span>GDELT Proxy Rotation Active</span>
+             <span>NewsCatcher API Active</span>
           </div>
           <button 
             onClick={runTest}

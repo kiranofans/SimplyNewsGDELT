@@ -91,13 +91,13 @@ const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, onFilterChange, detect
             </h3>
             <div className="space-y-1">
               {[
-                { label: 'English', val: 'english' },
-                { label: 'Chinese (Simplified)', val: 'chinese' },
-                { label: 'Chinese (Traditional)', val: 'chinese' },
-                { label: 'French', val: 'french' },
-                { label: 'Spanish', val: 'spanish' },
-                { label: 'German', val: 'german' },
-                { label: 'Japanese', val: 'japanese' }
+                { label: 'English', val: 'en' },
+                { label: 'Chinese (Simplified)', val: 'zh' },
+                { label: 'Chinese (Traditional)', val: 'zh' },
+                { label: 'French', val: 'fr' },
+                { label: 'Spanish', val: 'es' },
+                { label: 'German', val: 'de' },
+                { label: 'Japanese', val: 'ja' }
               ].map((l, idx) => (
                 <button 
                   key={`${l.val}-${idx}`}
@@ -117,10 +117,10 @@ const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, onFilterChange, detect
 
         <div className="pt-6 border-t border-gray-100 flex flex-col items-center gap-4">
           <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-100">
-            <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-black text-[10px]">GDELT</div>
+            <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-black text-[10px]">NC</div>
             <div className="flex flex-col">
               <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter leading-none">Powered by</span>
-              <span className="text-[10px] font-bold text-gray-800">GDELT Project</span>
+              <span className="text-[10px] font-bold text-gray-800">NewsCatcher API</span>
             </div>
           </div>
         </div>
